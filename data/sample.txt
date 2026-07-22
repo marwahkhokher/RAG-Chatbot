@@ -1,0 +1,31 @@
+NETSOL Technologies is a global provider of asset finance and leasing software solutions,
+serving banks, captive finance companies, and leasing companies worldwide. Its flagship
+product, NFS (NETSOL Financial Suite), covers the full asset finance and leasing lifecycle
+from origination to servicing.
+
+Retrieval-Augmented Generation (RAG) is a technique that combines a retrieval system with
+a language model. Instead of relying only on what the model memorized during training, RAG
+first fetches relevant chunks of text from an external knowledge base, then feeds those
+chunks to the language model as context so it can generate a grounded, up-to-date answer.
+
+Replace this file with your own documents (.txt, .md, or .pdf) before running the ingestion
+script, so the chatbot answers questions about your actual content instead of this sample.
+
+The solar system has eight planets orbiting the Sun: Mercury, Venus, Earth, Mars, Jupiter,
+Saturn, Uranus, and Neptune. Jupiter is the largest planet, and Mercury is the smallest and
+closest to the Sun.
+
+The Great Wall of China is a series of fortifications built across the historical northern
+borders of China, originally constructed to protect against invasions. It stretches for
+thousands of kilometers and was built over many centuries by different dynasties.
+
+Photosynthesis is the process plants use to convert sunlight, water, and carbon dioxide into
+glucose and oxygen. It takes place mainly in the leaves, inside structures called
+chloroplasts, and is the foundation of most food chains on Earth.
+
+The Wright brothers, Orville and Wilbur, are credited with building and flying the first
+successful motor-operated airplane in 1903 in Kitty Hawk, North Carolina.
+
+A vector database stores data as high-dimensional numerical embeddings and allows fast
+similarity search, so you can find pieces of text with meaning close to a query even if
+they don't share the same exact words.
