@@ -1,6 +1,7 @@
+import edge_tts
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 from app.rag import answer_question
@@ -25,6 +26,11 @@ class ChatRequest(BaseModel):
     history: list[Message] = []
 
 
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "en-US-AriaNeural"
+
+
 class ChatResponse(BaseModel):
     answer: str
     sources: list
@@ -45,6 +51,21 @@ def chat(req: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return result
+
+
+@app.post("/tts")
+async def text_to_speech(req: TTSRequest):
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    try:
+        communicate = edge_tts.Communicate(req.text, req.voice)
+        audio_data = b""
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data += chunk["data"]
+        return Response(content=audio_data, media_type="audio/mpeg")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1111,6 +1132,9 @@ HTML_PAGE = """
           <div class="bubble-meta">
             <span class="bubble-time">${getTime()}</span>
             <div class="message-actions">
+              <button class="action-btn tts-btn" title="Read aloud">
+                <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              </button>
               <button class="action-btn" title="Copy" onclick="copyText(this)">
                 <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
@@ -1127,6 +1151,11 @@ HTML_PAGE = """
           </div>
         </div>
       `;
+      const ttsButton = div.querySelector('.tts-btn');
+      if (ttsButton) {
+        ttsButton.dataset.text = text;
+        ttsButton.addEventListener('click', () => playAudio(ttsButton));
+      }
       chatArea.appendChild(div);
       chatArea.scrollTop = chatArea.scrollHeight;
       return div;
@@ -1220,6 +1249,27 @@ HTML_PAGE = """
     }
 
     // ── Action Buttons ──
+    async function playAudio(btn) {
+      const text = btn.dataset.text || '';
+      try {
+        btn.style.color = 'var(--accent)';
+        const response = await fetch('/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text })
+        });
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        await audio.play();
+        audio.onended = () => { btn.style.color = ''; URL.revokeObjectURL(audioUrl); };
+      } catch (err) {
+        console.error('TTS playback failed:', err);
+        btn.style.color = 'var(--red)';
+        setTimeout(() => btn.style.color = '', 2000);
+      }
+    }
+
     function copyText(btn) {
       const bubble = btn.closest('.bubble');
       const textNode = bubble.firstChild;
