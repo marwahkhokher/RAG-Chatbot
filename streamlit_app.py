@@ -4,11 +4,14 @@ welcome screen + suggestion cards + sourced message bubbles), for deployment on
 Streamlit Community Cloud. Reuses the existing RAG logic (app/rag.py) directly -
 no FastAPI needed here.
 """
+import asyncio
+import base64
 import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 
+import edge_tts
 import streamlit as st
 
 # Bridge Streamlit's secrets manager into environment variables so app/config.py
@@ -33,6 +36,22 @@ if any(p.exists() for p in _secrets_file_candidates):
             pass
 
 from app.rag import answer_question  # noqa: E402
+
+TTS_VOICE = "en-US-AriaNeural"
+
+
+async def _generate_speech(text: str, voice: str = TTS_VOICE) -> bytes:
+    communicate = edge_tts.Communicate(text, voice)
+    audio_data = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio_data += chunk["data"]
+    return audio_data
+
+
+def text_to_speech_bytes(text: str, voice: str = TTS_VOICE, timeout: float = 15.0) -> bytes:
+    return asyncio.run(asyncio.wait_for(_generate_speech(text, voice), timeout=timeout))
+
 
 st.set_page_config(page_title="RAG-Chatbot", page_icon="◆", layout="wide")
 
@@ -140,6 +159,18 @@ div[data-testid="column"] .stButton>button:hover { border-color: var(--accent); 
     background: var(--bg-secondary) !important; border: 1px solid var(--border) !important;
     color: var(--text-primary) !important; border-radius: 12px !important;
 }
+
+/* flat icon-row action buttons under assistant messages (speak / regenerate) */
+div[class*="st-key-actions_"] { margin-top: -8px; margin-bottom: 14px; }
+div[class*="st-key-actions_"] .stButton { width: auto; }
+div[class*="st-key-actions_"] .stButton > button {
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    color: var(--text-muted) !important; font-size: 14px !important; padding: 4px 8px !important;
+    min-height: 0 !important; line-height: 1 !important;
+}
+div[class*="st-key-actions_"] .stButton > button:hover {
+    background: var(--bg-hover) !important; color: var(--text-primary) !important; border-radius: 6px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -150,6 +181,12 @@ if "current_id" not in st.session_state:
     st.session_state.current_id = None
 if "pending" not in st.session_state:
     st.session_state.pending = None
+if "audio_cache" not in st.session_state:
+    st.session_state.audio_cache = {}  # "{conv_id}_{msg_index}" -> audio bytes
+if "audio_errors" not in st.session_state:
+    st.session_state.audio_errors = {}  # "{conv_id}_{msg_index}" -> error message
+if "autoplay_key" not in st.session_state:
+    st.session_state.autoplay_key = None  # the audio_key to autoplay on this render only
 
 
 def new_conversation() -> str:
@@ -200,7 +237,7 @@ st.markdown(
 )
 
 
-def render_message(msg: dict):
+def render_message(msg: dict, idx: int, is_last: bool):
     role = msg["role"]
     css_role = "user" if role == "user" else "bot"
     avatar = "U" if role == "user" else "R"
@@ -218,6 +255,52 @@ def render_message(msg: dict):
         f'<div class="bubble-time">{msg.get("time", "")}</div></div></div>',
         unsafe_allow_html=True,
     )
+
+    if role != "assistant":
+        return
+
+    audio_key = f"{st.session_state.current_id}_{idx}"
+
+    # Play audio with zero visible UI - a hidden <audio autoplay> element, only
+    # injected on the run right after it was (re)triggered, then cleared.
+    if st.session_state.autoplay_key == audio_key and audio_key in st.session_state.audio_cache:
+        b64 = base64.b64encode(st.session_state.audio_cache[audio_key]).decode()
+        st.markdown(
+            f'<audio autoplay style="display:none"><source src="data:audio/mp3;base64,{b64}"></audio>',
+            unsafe_allow_html=True,
+        )
+        st.session_state.autoplay_key = None
+
+    with st.container(key=f"actions_{audio_key}"):
+        n_cols = 2 if is_last else 1
+        cols = st.columns([1] * n_cols + [20])
+        with cols[0]:
+            if st.button("🔊", key=f"tts_{audio_key}", help="Read aloud"):
+                st.session_state.audio_errors.pop(audio_key, None)
+                if audio_key not in st.session_state.audio_cache:
+                    try:
+                        st.session_state.audio_cache[audio_key] = text_to_speech_bytes(msg["content"])
+                    except Exception as e:
+                        st.session_state.audio_errors[audio_key] = str(e)
+                if audio_key in st.session_state.audio_cache:
+                    st.session_state.autoplay_key = audio_key
+                st.rerun()
+        if is_last:
+            with cols[1]:
+                if st.button("🔄", key=f"regen_{audio_key}", help="Regenerate response"):
+                    last_user = next(
+                        (m["content"] for m in reversed(current["messages"]) if m["role"] == "user"), None
+                    )
+                    if last_user:
+                        current["messages"] = current["messages"][:-2]
+                        current["messages"].append(
+                            {"role": "user", "content": last_user, "time": datetime.now().strftime("%H:%M")}
+                        )
+                        st.session_state.pending = last_user
+                        st.rerun()
+
+    if audio_key in st.session_state.audio_errors:
+        st.error(f"Couldn't generate audio: {st.session_state.audio_errors[audio_key]}")
 
 
 chat_area = st.container()
@@ -243,8 +326,9 @@ with chat_area:
                     st.session_state.pending = title
                     st.rerun()
     else:
-        for msg in current["messages"]:
-            render_message(msg)
+        last_idx = len(current["messages"]) - 1
+        for idx, msg in enumerate(current["messages"]):
+            render_message(msg, idx, is_last=(idx == last_idx and not st.session_state.pending))
 
     if st.session_state.pending:
         st.markdown(
@@ -271,23 +355,6 @@ with chat_area:
         })
         st.session_state.pending = None
         st.rerun()
-
-    # Regenerate button under the last bot response
-    if (
-        current["messages"]
-        and current["messages"][-1]["role"] == "assistant"
-        and not st.session_state.pending
-    ):
-        last_user = next(
-            (m["content"] for m in reversed(current["messages"]) if m["role"] == "user"), None
-        )
-        if last_user and st.button("🔄 Regenerate response"):
-            current["messages"] = current["messages"][:-2]
-            current["messages"].append(
-                {"role": "user", "content": last_user, "time": datetime.now().strftime("%H:%M")}
-            )
-            st.session_state.pending = last_user
-            st.rerun()
 
 prompt = st.chat_input("Ask anything...")
 if prompt:
