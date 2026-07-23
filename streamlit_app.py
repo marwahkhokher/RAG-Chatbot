@@ -6,6 +6,7 @@ no FastAPI needed here.
 """
 import asyncio
 import base64
+import hashlib
 import os
 import uuid
 from datetime import datetime
@@ -13,6 +14,12 @@ from pathlib import Path
 
 import edge_tts
 import streamlit as st
+from groq import Groq
+
+try:
+    from streamlit_mic_recorder import mic_recorder
+except Exception:  # pragma: no cover - package is installed in deployed app runtime
+    mic_recorder = None
 
 # Bridge Streamlit's secrets manager into environment variables so app/config.py
 # (which reads via os.getenv) keeps working unchanged, whether run locally with .env
@@ -51,6 +58,26 @@ async def _generate_speech(text: str, voice: str = TTS_VOICE) -> bytes:
 
 def text_to_speech_bytes(text: str, voice: str = TTS_VOICE, timeout: float = 15.0) -> bytes:
     return asyncio.run(asyncio.wait_for(_generate_speech(text, voice), timeout=timeout))
+
+
+def transcribe_audio_bytes(audio_bytes: bytes) -> str:
+    """
+    Transcribe raw browser-captured audio bytes using Groq Whisper.
+    Returns an empty string when the audio payload is empty or the API key is unavailable.
+    """
+    if not audio_bytes:
+        return ""
+
+    api_key = os.getenv("GROQ_API_KEY") or ""
+    if not api_key:
+        return ""
+
+    client = Groq(api_key=api_key)
+    transcription = client.audio.transcriptions.create(
+        file=("recorded_audio.wav", audio_bytes),
+        model="whisper-large-v3",
+    )
+    return transcription.text.strip()
 
 
 st.set_page_config(page_title="RAG-Chatbot", page_icon="◆", layout="wide")
@@ -187,6 +214,10 @@ if "audio_errors" not in st.session_state:
     st.session_state.audio_errors = {}  # "{conv_id}_{msg_index}" -> error message
 if "autoplay_key" not in st.session_state:
     st.session_state.autoplay_key = None  # the audio_key to autoplay on this render only
+if "voice_prompt" not in st.session_state:
+    st.session_state.voice_prompt = None
+if "last_processed_mic_audio_key" not in st.session_state:
+    st.session_state.last_processed_mic_audio_key = None
 
 
 def new_conversation() -> str:
@@ -356,11 +387,42 @@ with chat_area:
         st.session_state.pending = None
         st.rerun()
 
-prompt = st.chat_input("Ask anything...")
-if prompt:
+mic_col, input_col = st.columns([1, 10])
+
+with mic_col:
+    if mic_recorder is None:
+        st.caption("🎙️ Mic input unavailable")
+    else:
+        mic_result = mic_recorder(
+            start_prompt="🎙️",
+            stop_prompt="⏹️",
+            just_once=False,
+            use_container_width=False,
+            key="voice_recorder",
+        )
+        if isinstance(mic_result, dict):
+            audio_bytes = mic_result.get("bytes") or mic_result.get("audio_bytes")
+            if audio_bytes:
+                audio_key = hashlib.sha1(audio_bytes).hexdigest()
+                if audio_key != st.session_state.last_processed_mic_audio_key:
+                    with st.spinner("Transcribing audio..."):
+                        transcript = transcribe_audio_bytes(audio_bytes)
+                    st.session_state.last_processed_mic_audio_key = audio_key
+                    if transcript:
+                        st.session_state.voice_prompt = transcript
+
+with input_col:
+    prompt = st.chat_input("Ask anything...")
+
+if st.session_state.voice_prompt:
+    st.info(f"Voice transcript: {st.session_state.voice_prompt}")
+
+final_prompt = (prompt or st.session_state.voice_prompt or "").strip()
+if final_prompt:
     current["messages"].append(
-        {"role": "user", "content": prompt, "time": datetime.now().strftime("%H:%M")}
+        {"role": "user", "content": final_prompt, "time": datetime.now().strftime("%H:%M")}
     )
-    maybe_set_title(current, prompt)
-    st.session_state.pending = prompt
+    maybe_set_title(current, final_prompt)
+    st.session_state.pending = final_prompt
+    st.session_state.voice_prompt = None
     st.rerun()
