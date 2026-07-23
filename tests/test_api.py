@@ -18,4 +18,4 @@ def test_chat_rejects_empty_question():
 def test_home_page_loads():
     res = client.get("/")
     assert res.status_code == 200
-    assert "RAG Chatbot" in res.text
+    assert "RAG-Chatbot" in res.text
