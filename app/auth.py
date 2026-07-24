@@ -19,11 +19,17 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 # Try to import face_recognition; set a flag so callers know what's available
 # ---------------------------------------------------------------------------
+# NOTE: a broad guard is deliberate. On Python 3.12+ `face_recognition` can fail
+# in ways other than ImportError — e.g. `face_recognition_models` imports
+# `pkg_resources` (missing when setuptools isn't installed), and on that failure
+# face_recognition calls `quit()`, which raises SystemExit (a BaseException, not
+# an Exception). Catching only ImportError let that escape and crashed pytest
+# collection. Catch anything so the app degrades gracefully instead.
 try:
     import face_recognition  # type: ignore
 
     FACE_LIB_AVAILABLE = True
-except ImportError:
+except BaseException:  # noqa: BLE001 - intentional: keep the app importable no matter how the lib fails
     FACE_LIB_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
