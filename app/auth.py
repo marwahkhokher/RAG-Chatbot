@@ -9,7 +9,6 @@ not installed so the rest of the app can still start.
 
 import base64
 import json
-import os
 from io import BytesIO
 from pathlib import Path
 
