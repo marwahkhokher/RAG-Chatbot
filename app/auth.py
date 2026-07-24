@@ -8,13 +8,14 @@ not installed so the rest of the app can still start.
 """
 
 import base64
-import json
 from io import BytesIO
-from pathlib import Path
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from app import config
+from app import qdrant_rest as qdrant
 
 # ---------------------------------------------------------------------------
 # Try to import face_recognition; set a flag so callers know what's available
@@ -33,22 +34,30 @@ except BaseException:  # noqa: BLE001 - intentional: keep the app importable no 
     FACE_LIB_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
-# Persistence – simple JSON file next to the project root
+# Persistence – Qdrant Vector Database
 # ---------------------------------------------------------------------------
-FACE_DB_PATH = Path(__file__).resolve().parent.parent / "face_db.json"
 
+def _ensure_faces_db() -> None:
+    # 128 is the standard dimension for face_recognition encodings
+    qdrant.ensure_collection(
+        vector_size=128, 
+        collection_name=config.QDRANT_FACES_COLLECTION, 
+        distance="Euclid"
+    )
 
-def _load_db() -> dict:
-    """Return {username: [[encoding_floats], ...], ...}."""
-    if FACE_DB_PATH.exists():
-        with open(FACE_DB_PATH, "r") as f:
-            return json.load(f)
-    return {}
-
-
-def _save_db(db: dict) -> None:
-    with open(FACE_DB_PATH, "w") as f:
-        json.dump(db, f)
+def _get_all_users() -> list[str]:
+    _ensure_faces_db()
+    with qdrant._client() as client:
+        # Simple scroll to get all distinct usernames
+        res = client.post(
+            f"/collections/{config.QDRANT_FACES_COLLECTION}/points/scroll",
+            json={"limit": 100, "with_payload": True, "with_vector": False}
+        )
+        if res.status_code == 200:
+            points = res.json()["result"]["points"]
+            usernames = {p["payload"]["username"] for p in points if "username" in p["payload"]}
+            return list(usernames)
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -111,12 +120,12 @@ def register_face(username: str, img_array: np.ndarray) -> dict:
         }
 
     username = username.strip()
-    db = _load_db()
-    # Allow overwriting / adding another encoding to an existing registration
-    if username not in db:
-        db[username] = []
-    db[username].append(encoding)
-    _save_db(db)
+    _ensure_faces_db()
+    qdrant.upsert_points(
+        vectors=[encoding],
+        payloads=[{"username": username}],
+        collection_name=config.QDRANT_FACES_COLLECTION
+    )
 
     return {
         "authenticated": True,
@@ -135,25 +144,28 @@ def login_face(img_array: np.ndarray) -> dict:
             "message": "No face detected. Please look at the camera.",
         }
 
-    db = _load_db()
-    if not db:
+    _ensure_faces_db()
+    
+    # Search for the closest match in Qdrant
+    try:
+        results = qdrant.search(
+            vector=encoding, 
+            k=1, 
+            collection_name=config.QDRANT_FACES_COLLECTION
+        )
+    except Exception: # noqa: BLE001
+        results = []
+
+    if not results:
         return {
             "authenticated": False,
             "username": "",
             "message": "No registered users yet. Please register first.",
         }
 
-    # Compare against every stored encoding
-    probe = np.array(encoding)
-    best_match: str | None = None
-    best_distance: float = 1.0  # lower is better
-
-    for username, stored_encodings in db.items():
-        for enc in stored_encodings:
-            distance = float(np.linalg.norm(probe - np.array(enc)))
-            if distance < best_distance:
-                best_distance = distance
-                best_match = username
+    best_match_point = results[0]
+    best_distance = best_match_point["score"]
+    best_match = best_match_point["payload"].get("username")
 
     if best_match and best_distance < FACE_MATCH_THRESHOLD:
         return {
@@ -228,5 +240,5 @@ def auth_status():
     """Check whether the face recognition backend is available."""
     return {
         "face_recognition_available": FACE_LIB_AVAILABLE,
-        "registered_users": list(_load_db().keys()),
+        "registered_users": _get_all_users(),
     }

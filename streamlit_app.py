@@ -9,6 +9,7 @@ import base64
 import hashlib
 import io
 import os
+import random
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -87,128 +88,129 @@ def transcribe_audio_bytes(audio_bytes: bytes) -> str:
 st.set_page_config(page_title="RAG-Chatbot", page_icon="◆", layout="wide")
 
 SUGGESTIONS = [
-    ("What is RAG?", "Explain Retrieval-Augmented Generation"),
-    ("Tell me about NETSOL", "Search company overview and products"),
-    ("What is a vector database?", "Understand high-dimensional embeddings"),
-    ("Explain photosynthesis", "Learn about energy conversion in plants"),
+    ("🧠", "What is RAG?", "Explain Retrieval-Augmented Generation"),
+    ("🔍", "Tell me about NETSOL", "Search company overview and products"),
+    ("🗄️", "What is a vector database?", "Understand high-dimensional embeddings"),
+    ("💡", "Explain photosynthesis", "Learn about energy conversion in plants"),
 ]
 
 # ---------- theme ----------
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
+/* ═══ Ethereal Glass palette (electric teal + violet on deep navy) ═══ */
 :root {
-    --bg-primary: #0d0d0f;
-    --bg-secondary: #16161a;
-    --bg-tertiary: #1e1e24;
-    --bg-hover: #2a2a32;
-    --bg-active: #32323c;
-    --border: #2a2a32;
-    --text-primary: #f0f0f5;
-    --text-secondary: #a0a0ad;
-    --text-muted: #666670;
-    --accent: #5b7cff;
-    --accent-glow: rgba(91, 124, 255, 0.15);
-    --user-bubble: #2e2e36;
-    --bot-bubble: #18181e;
+    --bg-primary: #0a0d1c;
+    --bg-secondary: #0e1120;
+    --bg-tertiary: #14172a;
+    --bg-hover: #1b1f36;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.14);
+    --glass: rgba(255,255,255,0.06);
+    --glass-hover: rgba(255,255,255,0.10);
+    --text-primary: #e8e6f0;
+    --text-secondary: #a8a4ba;
+    --text-muted: #6f6b82;
+    --teal: #00d4aa;
+    --teal-dim: #14b896;
+    --violet: #7c6ef0;
+    --coral: #ff6b8a;
+    --teal-glow: rgba(0,212,170,0.35);
+    --teal-soft: rgba(0,212,170,0.10);
+    --accent: #00d4aa;
+    --accent-glow: rgba(0,212,170,0.25);
 }
 
 #MainMenu, footer, header { visibility: hidden; }
 
 .stApp { background: var(--bg-primary); color: var(--text-primary); font-family: 'Inter', sans-serif; }
 
-/* Center the chat + input in a fixed-width column like the FastAPI app */
-.block-container {
-    max-width: 820px !important;
-    margin: 0 auto !important;
-    padding-top: 2rem !important;
-    padding-bottom: 6rem !important;
-}
-
 section[data-testid="stSidebar"] {
-    background: var(--bg-secondary);
+    background: rgba(10,13,28,0.75);
+    backdrop-filter: blur(24px);
     border-right: 1px solid var(--border);
 }
 section[data-testid="stSidebar"] .stButton>button {
     background: transparent; color: var(--text-secondary); border: 1px solid transparent;
-    border-radius: 8px; font-weight: 500; width: 100%; text-align: left; font-size: 13px;
-    padding: 8px 12px;
+    border-radius: 10px; font-weight: 500; width: 100%; text-align: left; font-size: 13px;
+    padding: 8px 12px; transition: all 0.2s;
 }
 section[data-testid="stSidebar"] .stButton>button:hover {
-    background: var(--bg-hover); color: var(--text-primary);
+    background: var(--glass); color: var(--text-primary); border-color: var(--border);
 }
-/* the New Chat button specifically (first button in sidebar) gets the accent look */
+/* New Chat button (first button in sidebar) gets the teal glass look */
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] > div:nth-child(2) .stButton>button {
-    background: var(--accent); color: #fff; text-align: center; font-weight: 600;
+    background: linear-gradient(135deg, rgba(0,212,170,0.16), rgba(124,110,240,0.12));
+    border: 1px solid rgba(0,212,170,0.30); color: var(--teal);
+    text-align: center; font-weight: 600;
 }
 section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] > div:nth-child(2) .stButton>button:hover {
-    background: #7b98ff;
+    background: linear-gradient(135deg, rgba(0,212,170,0.24), rgba(124,110,240,0.18)); color: var(--teal);
 }
 
+/* ═══ Header ═══ */
 .rc-header {
     display: flex; align-items: center; gap: 10px;
     padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px;
 }
-.rc-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: glow 2s ease-in-out infinite; }
-@keyframes glow { 0%,100% { box-shadow: 0 0 0 0 var(--accent-glow); } 50% { box-shadow: 0 0 8px 3px var(--accent-glow); } }
+.rc-dot { width: 8px; height: 8px; background: var(--teal); border-radius: 50%; box-shadow: 0 0 8px var(--teal-glow); animation: glow 2.5s ease-in-out infinite; }
 .rc-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
 
-.welcome { text-align: center; padding: 40px 24px 20px; }
-.welcome h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
-.welcome p { font-size: 14px; color: var(--text-muted); max-width: 440px; margin: 0 auto; line-height: 1.6; }
-
-div[data-testid="column"] .stButton>button {
-    background: var(--bg-secondary); border: 1px solid var(--border);
-    border-radius: 10px; color: var(--text-primary); text-align: left;
-    padding: 12px 14px; width: 100%; font-size: 13px; font-weight: 500;
+/* ═══ Welcome ═══ */
+.welcome { text-align: center; padding: 28px 24px 18px; }
+.welcome h2 {
+    font-size: 27px; font-weight: 700; margin-bottom: 10px; color: var(--teal);
+    text-shadow: 0 0 14px rgba(0,212,170,0.4);
 }
-div[data-testid="column"] .stButton>button:hover { border-color: var(--accent); background: var(--bg-tertiary); }
+.welcome p { font-size: 14px; color: var(--text-muted); max-width: 460px; margin: 0 auto; line-height: 1.6; }
+
+/* ═══ Suggested-prompt cards (glass) ═══ */
+div[data-testid="column"] .stButton>button {
+    background: var(--glass); border: 1px solid var(--border);
+    border-radius: 14px; color: var(--text-primary); text-align: left;
+    padding: 14px 16px; width: 100%; font-size: 13px; font-weight: 500;
+    backdrop-filter: blur(12px); transition: all 0.2s; white-space: pre-line;
+}
+div[data-testid="column"] .stButton>button:hover {
+    border-color: rgba(0,212,170,0.35); background: var(--glass-hover); transform: translateY(-2px);
+}
 
 .message { display: flex; gap: 14px; margin-bottom: 22px; align-items: flex-start; }
 .message.user { flex-direction: row-reverse; }
 .avatar {
-    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;
 }
-.message.user .avatar { background: linear-gradient(135deg, var(--accent), #4361ee); color: #fff; }
-.message.bot .avatar { background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--accent); }
-.avatar svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.msg-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.bubble { padding: 14px 18px; border-radius: 14px; font-size: 14px; line-height: 1.7; color: var(--text-primary); max-width: 88%; overflow-wrap: anywhere; }
-.message.user .bubble { background: var(--bg-tertiary); border: 1px solid var(--border); border-top-right-radius: 4px; margin-left: auto; }
-.message.bot .bubble { background: transparent; padding: 4px 0 0; }
-.bubble-time { font-size: 10.5px; color: var(--text-muted); margin-top: 6px; }
-.message.user .bubble-time { text-align: right; }
+.message.user .avatar { background: var(--accent); color: #fff; }
+.message.bot .avatar { background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-secondary); }
+.bubble { padding: 13px 17px; border-radius: 14px; font-size: 14px; line-height: 1.6; color: var(--text-primary); }
+.message.user .bubble { background: var(--user-bubble); border: 1px solid var(--border); border-top-right-radius: 4px; }
+.message.bot .bubble { background: var(--bot-bubble); border: 1px solid var(--border); border-top-left-radius: 4px; }
+.bubble-time { font-size: 10.5px; color: var(--text-muted); margin-top: 8px; }
 
 .sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .source-tag {
-    display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px;
-    background: var(--bg-secondary); border: 1px solid var(--border);
-    border-radius: 999px; font-size: 11.5px; color: var(--text-secondary);
+    display: inline-flex; align-items: center; padding: 5px 10px;
+    background: var(--bg-primary); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 11.5px; color: var(--text-secondary);
 }
 
-.typing-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-.typing-dots { display: flex; gap: 5px; padding: 13px 17px; background: var(--bot-bubble); border: 1px solid var(--border); border-radius: 14px; border-top-left-radius: 4px; }
-.typing-dots span { width: 7px; height: 7px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.4s infinite; }
+.typing-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.typing-dots {
+    display: flex; gap: 5px; padding: 13px 17px;
+    background: var(--glass); backdrop-filter: blur(12px);
+    border: 1px solid var(--border); border-radius: 16px; border-top-left-radius: 5px;
+}
+.typing-dots span { width: 7px; height: 7px; background: var(--teal); border-radius: 50%; animation: bounce 1.4s infinite; }
 .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
-@keyframes bounce { 0%,80%,100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
+@keyframes bounce { 0%,80%,100% { opacity: 0.3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-5px); } }
 .typing-label { font-size: 12px; color: var(--text-muted); }
 
-[data-testid="stChatInput"] { background: transparent !important; }
-[data-testid="stChatInput"] > div {
-    background: var(--bg-secondary) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 26px !important;
-}
 [data-testid="stChatInput"] textarea {
-    background: transparent !important; border: none !important;
-    color: var(--text-primary) !important; font-size: 14px !important;
-}
-[data-testid="stChatInput"]:focus-within > div {
-    border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px var(--accent-glow) !important;
+    background: var(--bg-secondary) !important; border: 1px solid var(--border) !important;
+    color: var(--text-primary) !important; border-radius: 12px !important;
 }
 
 /* flat icon-row action buttons under assistant messages (speak / regenerate) */
@@ -220,111 +222,10 @@ div[class*="st-key-actions_"] .stButton > button {
     min-height: 0 !important; line-height: 1 !important;
 }
 div[class*="st-key-actions_"] .stButton > button:hover {
-    background: var(--bg-hover) !important; color: var(--text-primary) !important; border-radius: 6px !important;
+    background: var(--glass) !important; color: var(--teal) !important; border-radius: 6px !important;
 }
 </style>
 """, unsafe_allow_html=True)
-
-
-# ---------- knowledge-base ingestion (mirrors the FastAPI /upload endpoint) ----------
-def ingest_uploaded(uploaded) -> int:
-    """Ingest a Streamlit UploadedFile (.txt/.md/.pdf) into Qdrant. Returns #chunks."""
-    raw = uploaded.getvalue()
-    suffix = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
-    if suffix == "pdf":
-        reader = PdfReader(io.BytesIO(raw))
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    else:
-        text = raw.decode("utf-8", errors="replace")
-
-    if not text.strip():
-        raise ValueError("File appears to be empty.")
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = splitter.split_text(text)
-    upsert_documents(chunks, [uploaded.name] * len(chunks))
-    return len(chunks)
-
-
-# ---------- face-recognition auth gate (mirrors the FastAPI auth overlay) ----------
-st.session_state.setdefault("authenticated", False)
-st.session_state.setdefault("username", "")
-
-
-def render_auth_gate() -> None:
-    _, mid, _ = st.columns([1, 2, 1])
-    with mid:
-        st.markdown(
-            '<div style="text-align:center;padding-top:8px;">'
-            '<div style="font-size:22px;font-weight:600;letter-spacing:-0.02em;">RAG-Chatbot</div>'
-            '<div style="color:var(--text-muted);font-size:14px;margin-top:4px;">'
-            'Sign in with your face to continue</div></div>',
-            unsafe_allow_html=True,
-        )
-
-        if not auth.FACE_LIB_AVAILABLE:
-            st.info("Face recognition isn't available in this environment. You can continue as a guest.")
-
-        mode = st.radio(
-            "Mode",
-            ["Sign In", "Register"],
-            horizontal=True,
-            label_visibility="collapsed",
-            disabled=not auth.FACE_LIB_AVAILABLE,
-        )
-
-        reg_name = ""
-        if mode == "Register":
-            reg_name = st.text_input("Your name", placeholder="Enter your name")
-
-        img = st.camera_input("Look at the camera") if auth.FACE_LIB_AVAILABLE else None
-
-        c1, c2 = st.columns(2)
-        with c1:
-            act = st.button(
-                "Register Face" if mode == "Register" else "Sign In",
-                type="primary",
-                use_container_width=True,
-                disabled=not auth.FACE_LIB_AVAILABLE,
-            )
-        with c2:
-            skip = st.button("Continue as Guest", use_container_width=True)
-
-        if skip:
-            st.session_state.authenticated = True
-            st.session_state.username = "Guest"
-            st.rerun()
-
-        if act:
-            if img is None:
-                st.error("Please capture a photo first using the camera above.")
-                return
-            if mode == "Register" and not reg_name.strip():
-                st.error("Please enter your name to register.")
-                return
-            try:
-                arr = auth._bytes_to_image(img.getvalue())
-                result = (
-                    auth.register_face(reg_name, arr)
-                    if mode == "Register"
-                    else auth.login_face(arr)
-                )
-            except RuntimeError as exc:
-                st.error(str(exc))
-                return
-
-            if result["authenticated"]:
-                st.session_state.authenticated = True
-                st.session_state.username = result["username"]
-                st.rerun()
-            else:
-                st.error(result["message"])
-
-
-if not st.session_state.authenticated:
-    render_auth_gate()
-    st.stop()
-
 
 # ---------- state: multiple conversations, each with its own history ----------
 if "conversations" not in st.session_state:
@@ -540,19 +441,20 @@ chat_area = st.container()
 with chat_area:
     if not current["messages"]:
         st.markdown('<div class="welcome">', unsafe_allow_html=True)
-        _u = st.session_state.get("username") or ""
-        _greet = f"Hello, {_u}! How can I help?" if _u and _u != "Guest" else "How can I help you today?"
-        st.markdown(f"<h2>{_greet}</h2>", unsafe_allow_html=True)
+        st.markdown("<h2>How can I help you today?</h2>", unsafe_allow_html=True)
         st.markdown(
-            "<p>Ask me anything. I'll search your knowledge base and provide accurate, sourced answers.</p>",
+            '<div class="welcome">'
+            '<div class="bot-hero"><div class="bot-node"><span class="pulse-ring"></span>'
+            f"{BOT_ICON}</div></div>"
+            "<h2>Ask anything. Know everything.</h2>"
+            f"<p>{_sub}</p></div>",
             unsafe_allow_html=True,
         )
-        st.markdown("</div>", unsafe_allow_html=True)
 
         cols = st.columns(2)
-        for i, (title, desc) in enumerate(SUGGESTIONS):
+        for i, (icon, title, desc) in enumerate(SUGGESTIONS):
             with cols[i % 2]:
-                if st.button(f"{title}\n\n{desc}", key=f"sugg_{i}", use_container_width=True):
+                if st.button(f"{icon}  {title}\n\n{desc}", key=f"sugg_{i}", use_container_width=True):
                     current["messages"].append(
                         {"role": "user", "content": title, "time": datetime.now(timezone.utc).strftime("%H:%M")}
                     )
@@ -567,9 +469,9 @@ with chat_area:
     if st.session_state.pending:
         st.markdown(
             '<div class="typing-row"><div class="avatar" style="background:var(--bg-tertiary);'
-            f'border:1px solid var(--border);">{BOT_ICON}</div>'
+            'border:1px solid var(--border);color:var(--text-secondary);">R</div>'
             '<div class="typing-dots"><span></span><span></span><span></span></div>'
-            '<span class="typing-label">Searching knowledge base...</span></div>',
+            '<span class="typing-label">Searching knowledge base…</span></div>',
             unsafe_allow_html=True,
         )
         try:

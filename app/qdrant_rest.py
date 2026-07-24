@@ -18,36 +18,36 @@ def _client() -> httpx.Client:
     )
 
 
-def ensure_collection(vector_size: int) -> None:
+def ensure_collection(vector_size: int, collection_name: str = config.QDRANT_COLLECTION, distance: str = "Cosine") -> None:
     with _client() as client:
-        res = client.get(f"/collections/{config.QDRANT_COLLECTION}")
+        res = client.get(f"/collections/{collection_name}")
         if res.status_code == 200:
             return
         create = client.put(
-            f"/collections/{config.QDRANT_COLLECTION}",
-            json={"vectors": {"size": vector_size, "distance": "Cosine"}},
+            f"/collections/{collection_name}",
+            json={"vectors": {"size": vector_size, "distance": distance}},
         )
         create.raise_for_status()
 
 
-def upsert_points(vectors: list[list[float]], payloads: list[dict]) -> None:
+def upsert_points(vectors: list[list[float]], payloads: list[dict], collection_name: str = config.QDRANT_COLLECTION) -> None:
     points = [
         {"id": str(uuid.uuid4()), "vector": vector, "payload": payload}
         for vector, payload in zip(vectors, payloads)
     ]
     with _client() as client:
         res = client.put(
-            f"/collections/{config.QDRANT_COLLECTION}/points",
+            f"/collections/{collection_name}/points",
             params={"wait": "true"},
             json={"points": points},
         )
         res.raise_for_status()
 
 
-def search(vector: list[float], k: int = 4) -> list[dict]:
+def search(vector: list[float], k: int = 4, collection_name: str = config.QDRANT_COLLECTION) -> list[dict]:
     with _client() as client:
         res = client.post(
-            f"/collections/{config.QDRANT_COLLECTION}/points/search",
+            f"/collections/{collection_name}/points/search",
             json={"vector": vector, "limit": k, "with_payload": True},
         )
         res.raise_for_status()
