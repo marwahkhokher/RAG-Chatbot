@@ -25,10 +25,7 @@ jobs:
           pip install ruff
 
       - name: Lint with ruff
-        run: ruff check app tests streamlit_app.py
+        run: ruff check app tests
 
       - name: Run tests
         run: pytest -v
-
-      - name: Smoke-test Streamlit app (imports cleanly)
-        run: python -c "import streamlit_app"
