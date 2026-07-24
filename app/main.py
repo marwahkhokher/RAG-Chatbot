@@ -1,12 +1,12 @@
 import io
 
 import edge_tts
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pypdf import PdfReader
 from pydantic import BaseModel
+from pypdf import PdfReader
 
 from app.auth import router as auth_router
 from app.rag import answer_question, upsert_documents
@@ -56,7 +56,7 @@ def chat(req: ChatRequest):
     try:
         history = [m.model_dump() for m in req.history]
         result = answer_question(req.question, history=history)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(e))
     return result
 
@@ -72,12 +72,12 @@ async def text_to_speech(req: TTSRequest):
             if chunk["type"] == "audio":
                 audio_data += chunk["data"]
         return Response(content=audio_data, media_type="audio/mpeg")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...)):  # noqa: B008
     """Accept .txt, .md, or .pdf uploads and ingest them into the RAG knowledge base."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")

@@ -9,7 +9,7 @@ import base64
 import hashlib
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import edge_tts
@@ -18,7 +18,7 @@ from groq import Groq
 
 try:
     from streamlit_mic_recorder import mic_recorder
-except Exception:  # pragma: no cover - package is installed in deployed app runtime
+except Exception:  # noqa: BLE001  # pragma: no cover - package is installed in deployed app runtime
     mic_recorder = None
 
 # Bridge Streamlit's secrets manager into environment variables so app/config.py
@@ -39,10 +39,10 @@ if any(p.exists() for p in _secrets_file_candidates):
         try:
             if _key in st.secrets:
                 os.environ[_key] = str(st.secrets[_key])
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
-from app.rag import answer_question  # noqa: E402
+from app.rag import answer_question
 
 TTS_VOICE = "en-US-AriaNeural"
 
@@ -311,7 +311,7 @@ def render_message(msg: dict, idx: int, is_last: bool):
                 if audio_key not in st.session_state.audio_cache:
                     try:
                         st.session_state.audio_cache[audio_key] = text_to_speech_bytes(msg["content"])
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         st.session_state.audio_errors[audio_key] = str(e)
                 if audio_key in st.session_state.audio_cache:
                     st.session_state.autoplay_key = audio_key
@@ -325,7 +325,7 @@ def render_message(msg: dict, idx: int, is_last: bool):
                     if last_user:
                         current["messages"] = current["messages"][:-2]
                         current["messages"].append(
-                            {"role": "user", "content": last_user, "time": datetime.now().strftime("%H:%M")}
+                            {"role": "user", "content": last_user, "time": datetime.now(timezone.utc).strftime("%H:%M")}
                         )
                         st.session_state.pending = last_user
                         st.rerun()
@@ -351,7 +351,7 @@ with chat_area:
             with cols[i % 2]:
                 if st.button(f"{title}\n\n{desc}", key=f"sugg_{i}", use_container_width=True):
                     current["messages"].append(
-                        {"role": "user", "content": title, "time": datetime.now().strftime("%H:%M")}
+                        {"role": "user", "content": title, "time": datetime.now(timezone.utc).strftime("%H:%M")}
                     )
                     maybe_set_title(current, title)
                     st.session_state.pending = title
@@ -375,14 +375,14 @@ with chat_area:
                 history=[{"role": m["role"], "content": m["content"]} for m in current["messages"][:-1]],
             )
             answer, sources = result["answer"], result["sources"]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             answer, sources = f"Something went wrong: {e}", []
 
         current["messages"].append({
             "role": "assistant",
             "content": answer,
             "sources": sources,
-            "time": datetime.now().strftime("%H:%M"),
+            "time": datetime.now(timezone.utc).strftime("%H:%M"),
         })
         st.session_state.pending = None
         st.rerun()
@@ -420,7 +420,7 @@ if st.session_state.voice_prompt:
 final_prompt = (prompt or st.session_state.voice_prompt or "").strip()
 if final_prompt:
     current["messages"].append(
-        {"role": "user", "content": final_prompt, "time": datetime.now().strftime("%H:%M")}
+        {"role": "user", "content": final_prompt, "time": datetime.now(timezone.utc).strftime("%H:%M")}
     )
     maybe_set_title(current, final_prompt)
     st.session_state.pending = final_prompt

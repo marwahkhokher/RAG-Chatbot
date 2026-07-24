@@ -105,7 +105,7 @@ def register(req: RegisterRequest):
 
     try:
         img = _b64_to_image(req.image)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Invalid image: {exc}")
 
     try:
@@ -139,7 +139,7 @@ def register(req: RegisterRequest):
 def login(req: LoginRequest):
     try:
         img = _b64_to_image(req.image)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Invalid image: {exc}")
 
     try:
