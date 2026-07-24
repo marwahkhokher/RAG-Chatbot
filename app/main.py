@@ -11,7 +11,7 @@ from pypdf import PdfReader
 from app.auth import router as auth_router
 from app.rag import answer_question, upsert_documents
 
-app = FastAPI(title="RAG Chatbot", version="2.0.0")
+app = FastAPI(title="Sir Talks Alot", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -124,8 +124,8 @@ HTML_PAGE = """
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RAG-Chatbot</title>
-  <meta name="description" content="An intelligent RAG chatbot with face authentication, powered by Groq LLM and Qdrant vector search.">
+  <title>Sir Talks Alot</title>
+  <meta name="description" content="Sir Talks Alot - an intelligent RAG chatbot with face authentication, powered by Groq LLM and Qdrant vector search.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -147,7 +147,7 @@ HTML_PAGE = """
       --accent-2: #6366f1;
       --accent-3: #3b82f6;
       --accent-glow: rgba(139, 92, 246, 0.12);
-      --accent-glow-strong: rgba(139, 92, 246, 0.25);
+      --accent-glow-strong: rgba(139, 92, 246, 0.35);
       --green: #22c55e;
       --red: #ef4444;
       --amber: #f59e0b;
@@ -167,6 +167,85 @@ HTML_PAGE = """
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
     }
+
+    /* ═══════════════════════════════════════
+       LIVE ANIMATED BACKGROUND
+    ═══════════════════════════════════════ */
+    .live-bg {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+      transition: transform 0.25s ease-out;
+    }
+    .live-bg span {
+      position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.22;
+    }
+    .live-bg span:nth-child(1) { width: 420px; height: 420px; background: var(--accent-1); top: -100px; left: -80px; animation: drift1 16s ease-in-out infinite; }
+    .live-bg span:nth-child(2) { width: 360px; height: 360px; background: var(--accent-3); bottom: -110px; right: -70px; animation: drift2 19s ease-in-out infinite; }
+    .live-bg span:nth-child(3) { width: 280px; height: 280px; background: var(--accent-2); top: 45%; right: 12%; animation: drift1 22s ease-in-out infinite reverse; }
+    @keyframes drift1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(45px,-30px) scale(1.08); } }
+    @keyframes drift2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-40px,30px) scale(1.06); } }
+
+    .click-ripple {
+      position: fixed; z-index: 1500; pointer-events: none;
+      width: 10px; height: 10px; margin: -5px 0 0 -5px;
+      border-radius: 50%; background: var(--accent-glow-strong);
+      animation: rippleOut 0.6s ease-out forwards;
+    }
+    @keyframes rippleOut {
+      from { transform: scale(1); opacity: 0.6; }
+      to   { transform: scale(14); opacity: 0; }
+    }
+
+    /* ═══════════════════════════════════════
+       GLOW-ON-CLICK (all interactive controls)
+    ═══════════════════════════════════════ */
+    .auth-btn, .new-chat-btn, .icon-btn, .send-btn, .bar-btn,
+    .suggestion-card, .chat-item, .splash-btn {
+      transition: box-shadow var(--transition), transform 0.1s, border-color var(--transition), background var(--transition);
+    }
+    .auth-btn:active, .auth-btn:focus-visible,
+    .new-chat-btn:active, .new-chat-btn:focus-visible,
+    .icon-btn:active, .icon-btn:focus-visible,
+    .send-btn:active, .send-btn:focus-visible,
+    .bar-btn:active, .bar-btn:focus-visible,
+    .suggestion-card:active,
+    .chat-item:active,
+    .splash-btn:active, .splash-btn:focus-visible {
+      box-shadow: 0 0 0 4px var(--accent-glow-strong), 0 0 24px var(--accent-glow-strong) !important;
+    }
+
+    /* ═══════════════════════════════════════
+       SPLASH SCREEN
+    ═══════════════════════════════════════ */
+    .splash-screen {
+      position: fixed; inset: 0; z-index: 2000;
+      background: var(--bg-primary);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+    .splash-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+    .splash-inner { text-align: center; padding: 20px; max-width: 380px; }
+    .splash-bot { display: inline-block; animation: botFloat 3.2s ease-in-out infinite; }
+    @keyframes botFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+    .splash-glow {
+      width: 140px; height: 28px; margin: 4px auto 0; border-radius: 50%;
+      background: var(--accent-1); filter: blur(20px); opacity: 0.5;
+      animation: splashGlowPulse 2.4s ease-in-out infinite;
+    }
+    @keyframes splashGlowPulse { 0%,100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.2); } }
+    .splash-title { font-size: 30px; font-weight: 700; margin-top: 22px; letter-spacing: -0.02em; }
+    .splash-title .accent {
+      background: linear-gradient(135deg, var(--accent-1), var(--accent-3));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .splash-tag { color: var(--text-muted); font-size: 14.5px; margin-top: 10px; line-height: 1.6; }
+    .splash-btn {
+      margin-top: 28px; padding: 13px 32px; border: none; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent-1), var(--accent-2)); color: #fff;
+      font-family: var(--font); font-size: 14.5px; font-weight: 600; cursor: pointer;
+    }
+    .splash-btn:hover { filter: brightness(1.12); }
+    .splash-btn:active { transform: scale(0.97); }
 
     /* ═══════════════════════════════════════
        AUTH OVERLAY
@@ -355,6 +434,8 @@ HTML_PAGE = """
     .app {
       display: flex;
       height: 100vh;
+      position: relative;
+      z-index: 1;
     }
 
     /* ── Sidebar ── */
@@ -396,6 +477,7 @@ HTML_PAGE = """
       font-family: var(--font); font-size: 13px; font-weight: 500;
       cursor: pointer;
       transition: transform 0.1s, filter var(--transition);
+      margin-bottom: 10px;
     }
     .new-chat-btn:hover { filter: brightness(1.1); }
     .new-chat-btn:active { transform: scale(0.97); }
@@ -405,6 +487,20 @@ HTML_PAGE = """
       stroke-width: 2; stroke-linecap: round;
     }
 
+    .chat-search {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font); font-size: 12.5px;
+      outline: none;
+      transition: border-color var(--transition);
+    }
+    .chat-search:focus { border-color: var(--accent-1); }
+    .chat-search::placeholder { color: var(--text-muted); }
+
     .chat-list {
       flex: 1; overflow-y: auto; padding: 6px 8px;
     }
@@ -413,12 +509,13 @@ HTML_PAGE = """
 
     .chat-item {
       display: flex; align-items: center; gap: 10px;
-      padding: 9px 12px;
+      padding: 9px 10px 9px 12px;
       border-radius: var(--radius-xs); cursor: pointer;
       transition: background var(--transition);
       margin-bottom: 2px;
     }
     .chat-item:hover { background: var(--bg-hover); }
+    .chat-item:hover .chat-item-delete { opacity: 1; }
     .chat-item.active { background: var(--bg-active); }
     .chat-item-icon {
       width: 7px; height: 7px;
@@ -435,6 +532,16 @@ HTML_PAGE = """
     .chat-item-time {
       font-size: 10px; color: var(--text-muted); flex-shrink: 0;
     }
+    .chat-item-delete {
+      width: 22px; height: 22px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent; border: none; border-radius: var(--radius-xs);
+      color: var(--text-muted); cursor: pointer; opacity: 0;
+      transition: opacity var(--transition), background var(--transition), color var(--transition);
+    }
+    .chat-item-delete:hover { background: rgba(239,68,68,0.15); color: var(--red); }
+    .chat-item-delete svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+    .chat-list-empty { padding: 20px 12px; font-size: 12.5px; color: var(--text-muted); text-align: center; }
 
     .sidebar-footer {
       padding: 12px 14px;
@@ -728,6 +835,7 @@ HTML_PAGE = """
       stroke: currentColor; fill: none;
       stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
     }
+    .msg-action.tts-btn.playing { color: var(--accent-1); opacity: 1; }
 
     /* Sources */
     .sources {
@@ -930,6 +1038,37 @@ HTML_PAGE = """
     /* Hidden file input */
     #fileInput { display: none; }
 
+    /* ═══════════════════════════════════════
+       CONFIRM MODAL
+    ═══════════════════════════════════════ */
+    .confirm-modal {
+      position: fixed; inset: 0; z-index: 3000;
+      background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .confirm-modal.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .confirm-modal-card {
+      width: 340px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 26px 24px 22px;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+      animation: authSlideIn 0.25s ease-out;
+    }
+    .confirm-modal-icon {
+      width: 46px; height: 46px; border-radius: 14px;
+      background: rgba(239,68,68,0.12);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .confirm-modal-icon svg { width: 22px; height: 22px; stroke: var(--red); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .confirm-modal-text { font-size: 14px; color: var(--text-primary); text-align: center; line-height: 1.5; }
+    .confirm-modal-actions { display: flex; gap: 10px; width: 100%; }
+    .confirm-btn-danger { background: var(--red) !important; color: #fff !important; }
+    .confirm-btn-danger:hover { filter: brightness(1.1); }
+
     /* Responsive */
     @media (max-width: 768px) {
       .sidebar { position: absolute; height: 100%; z-index: 50; }
@@ -942,9 +1081,36 @@ HTML_PAGE = """
   </style>
 </head>
 <body>
+  <div class="live-bg"><span></span><span></span><span></span></div>
+
+
+  <!-- ═══════ SPLASH SCREEN ═══════ -->
+  <div class="splash-screen" id="splashScreen">
+    <div class="splash-inner">
+      <div class="splash-bot">
+        <svg width="130" height="148" viewBox="0 0 150 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <line x1="75" y1="8" x2="75" y2="26" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="75" cy="6" r="6" fill="#3b82f6"/>
+          <rect x="25" y="26" width="100" height="86" rx="42" fill="#1e1e22" stroke="#8b5cf6" stroke-width="2.5"/>
+          <circle cx="52" cy="70" r="11" fill="#f4f4f5"/>
+          <circle cx="98" cy="70" r="11" fill="#f4f4f5"/>
+          <circle cx="52" cy="70" r="5" fill="#0f0f11"/>
+          <circle cx="98" cy="70" r="5" fill="#0f0f11"/>
+          <path d="M60 92 Q75 102 90 92" stroke="#f4f4f5" stroke-width="3" stroke-linecap="round" fill="none"/>
+          <rect x="42" y="118" width="66" height="42" rx="20" fill="#1e1e22" stroke="#8b5cf6" stroke-width="2.5"/>
+          <ellipse cx="18" cy="128" rx="10" ry="16" fill="#1e1e22" stroke="#8b5cf6" stroke-width="2" transform="rotate(-18 18 128)"/>
+          <ellipse cx="132" cy="128" rx="10" ry="16" fill="#1e1e22" stroke="#8b5cf6" stroke-width="2" transform="rotate(18 132 128)"/>
+        </svg>
+      </div>
+      <div class="splash-glow"></div>
+      <div class="splash-title">Meet <span class="accent">Sir Talks Alot</span></div>
+      <div class="splash-tag">Your chatty AI assistant - ask him anything, he's always got something to say.</div>
+      <button class="splash-btn" onclick="dismissSplash()">Get Started</button>
+    </div>
+  </div>
 
   <!-- ═══════ AUTH OVERLAY ═══════ -->
-  <div class="auth-overlay" id="authOverlay">
+  <div class="auth-overlay hidden" id="authOverlay">
     <div class="auth-card">
       <div class="auth-logo">
         <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 1 5 5v2a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M3.05 13A9 9 0 0 0 12 21a9 9 0 0 0 8.95-8"/><line x1="12" y1="21" x2="12" y2="24"/></svg>
@@ -993,14 +1159,9 @@ HTML_PAGE = """
           <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           New Chat
         </button>
+        <input class="chat-search" id="chatSearch" type="text" placeholder="Search chats..." oninput="renderChatList()">
       </div>
-      <div class="chat-list" id="chatList">
-        <div class="chat-item active" onclick="selectChat(this)">
-          <div class="chat-item-icon"></div>
-          <span class="chat-item-text">Current Session</span>
-          <span class="chat-item-time">Now</span>
-        </div>
-      </div>
+      <div class="chat-list" id="chatList"></div>
       <div class="sidebar-footer">
         <div class="user-profile" onclick="showAuthOverlay()">
           <div class="user-avatar" id="sidebarAvatar">?</div>
@@ -1023,7 +1184,7 @@ HTML_PAGE = """
           </button>
           <div class="header-brand">
             <div class="brand-dot"></div>
-            <span class="brand-name">RAG-Chatbot</span>
+            <span class="brand-name">Sir Talks Alot</span>
           </div>
         </div>
         <div class="header-right">
@@ -1035,37 +1196,7 @@ HTML_PAGE = """
 
       <!-- Chat Area -->
       <div class="chat-area" id="chatArea">
-        <div class="chat-inner" id="chatInner">
-          <div class="welcome" id="welcome">
-            <div class="welcome-icon">
-              <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-            </div>
-            <h2 id="welcomeGreeting">Hello! How can I help?</h2>
-            <p>Ask me anything — I'll search your knowledge base and provide accurate, sourced answers.</p>
-            <div class="suggestions">
-              <div class="suggestion-card" onclick="sendSuggestion(this)">
-                <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-                <div class="card-title">What is RAG?</div>
-                <div class="card-desc">Explain Retrieval-Augmented Generation</div>
-              </div>
-              <div class="suggestion-card" onclick="sendSuggestion(this)">
-                <div class="card-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
-                <div class="card-title">Tell me about NETSOL</div>
-                <div class="card-desc">Search company overview and products</div>
-              </div>
-              <div class="suggestion-card" onclick="sendSuggestion(this)">
-                <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
-                <div class="card-title">What is a vector database?</div>
-                <div class="card-desc">Understand high-dimensional embeddings</div>
-              </div>
-              <div class="suggestion-card" onclick="sendSuggestion(this)">
-                <div class="card-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-                <div class="card-title">Explain photosynthesis</div>
-                <div class="card-desc">Learn about energy conversion in plants</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div class="chat-inner" id="chatInner"></div>
       </div>
 
       <!-- Scroll-to-bottom -->
@@ -1100,11 +1231,11 @@ HTML_PAGE = """
           </div>
           <input type="file" id="fileInput" accept=".txt,.md,.pdf" onchange="handleFileUpload(event)">
           <div class="input-footer">
-            <span>RAG-Chatbot</span>
+            <span>Sir Talks Alot</span>
             <div class="dot"></div>
             <span>Grounded in your data</span>
             <div class="dot"></div>
-            <span>Enter ⏎ to send</span>
+            <span>Enter &#9166; to send</span>
           </div>
         </div>
       </div>
@@ -1115,31 +1246,78 @@ HTML_PAGE = """
   <!-- Upload toast -->
   <div class="upload-toast" id="uploadToast"></div>
 
+  <!-- ═══════ CONFIRM MODAL ═══════ -->
+  <div class="confirm-modal hidden" id="confirmModal">
+    <div class="confirm-modal-card">
+      <div class="confirm-modal-icon">
+        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </div>
+      <div class="confirm-modal-text" id="confirmModalText">Are you sure?</div>
+      <div class="confirm-modal-actions">
+        <button class="auth-btn secondary" id="confirmModalCancel">Cancel</button>
+        <button class="auth-btn confirm-btn-danger" id="confirmModalOk">Delete</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ── Element refs ──
-    const chatArea     = document.getElementById('chatArea');
-    const chatInner    = document.getElementById('chatInner');
-    const msgInput     = document.getElementById('msgInput');
-    const sendBtn      = document.getElementById('sendBtn');
-    const scrollBtn    = document.getElementById('scrollBtn');
-    const sidebar      = document.getElementById('sidebar');
-    const authOverlay  = document.getElementById('authOverlay');
-    const micBtn       = document.getElementById('micBtn');
+    const chatArea      = document.getElementById('chatArea');
+    const chatInner     = document.getElementById('chatInner');
+    const msgInput      = document.getElementById('msgInput');
+    const sendBtn       = document.getElementById('sendBtn');
+    const scrollBtn     = document.getElementById('scrollBtn');
+    const sidebar       = document.getElementById('sidebar');
+    const authOverlay   = document.getElementById('authOverlay');
+    const splashScreen  = document.getElementById('splashScreen');
+    const micBtn        = document.getElementById('micBtn');
+    const chatListEl    = document.getElementById('chatList');
+    const chatSearchEl  = document.getElementById('chatSearch');
 
-    let history          = [];
+    let history          = [];   // [{role, content}] for the active conversation - sent to /chat
     let lastUserQuestion = '';
     let currentUser      = sessionStorage.getItem('rag_user') || '';
     let isRegisterMode   = false;
     let recognition      = null;
-    let isRecording      = false;
-    let webcamStream     = null;
+    let isRecording       = false;
+    let webcamStream      = null;
+    let currentConvId     = null;
+    let conversations     = {};   // { id: { id, title, messages: [{role, content, sources, time}], updatedAt } }
+    let currentAudio       = null;
+    let currentAudioBtn    = null;
 
-    // ── Initialize ──
-    if (currentUser) {
-      authOverlay.classList.add('hidden');
-      setUserUI(currentUser);
-    } else {
-      startWebcam();
+    // ═══════════════════════════════════════
+    //   LIVE INTERACTIVE BACKGROUND
+    // ═══════════════════════════════════════
+    const liveBg = document.querySelector('.live-bg');
+    document.addEventListener('mousemove', (e) => {
+      const x = (e.clientX / window.innerWidth - 0.5) * 30;
+      const y = (e.clientY / window.innerHeight - 0.5) * 30;
+      liveBg.style.transform = `translate(${x}px, ${y}px)`;
+    });
+
+    document.addEventListener('click', (e) => {
+      const ripple = document.createElement('span');
+      ripple.className = 'click-ripple';
+      ripple.style.left = e.clientX + 'px';
+      ripple.style.top = e.clientY + 'px';
+      document.body.appendChild(ripple);
+      ripple.addEventListener('animationend', () => ripple.remove());
+    });
+
+    // ═══════════════════════════════════════
+    //   SPLASH SCREEN
+    // ═══════════════════════════════════════
+    function dismissSplash() {
+      splashScreen.classList.add('hidden');
+      if (currentUser) {
+        authOverlay.classList.add('hidden');
+        setUserUI(currentUser);
+        initApp();
+      } else {
+        authOverlay.classList.remove('hidden');
+        startWebcam();
+      }
     }
 
     // ═══════════════════════════════════════
@@ -1242,6 +1420,7 @@ HTML_PAGE = """
             setTimeout(() => {
               stopWebcam();
               authOverlay.classList.add('hidden');
+              initApp();
             }, 1000);
           } else {
             showAuthMessage(data.message || data.detail || 'Registration failed.', 'error');
@@ -1264,6 +1443,7 @@ HTML_PAGE = """
             setTimeout(() => {
               stopWebcam();
               authOverlay.classList.add('hidden');
+              initApp();
             }, 1000);
           } else {
             showAuthMessage(data.message || data.detail || 'Login failed.', 'error');
@@ -1283,47 +1463,153 @@ HTML_PAGE = """
       setUserUI(currentUser);
       stopWebcam();
       authOverlay.classList.add('hidden');
+      initApp();
     }
 
     function showAuthOverlay() {
-      authOverlay.classList.remove('hidden');
-      startWebcam();
+      showConfirm('Sign out and return to the sign-in screen?', () => {
+        sessionStorage.removeItem('rag_user');
+        currentUser = '';
+        isRegisterMode = false;
+        document.getElementById('regUsername').style.display = 'none';
+        document.getElementById('authTitle').textContent = 'Welcome Back';
+        document.getElementById('authSubtitle').textContent = 'Look at the camera to sign in with your face';
+        document.getElementById('authPrimaryBtn').textContent = 'Sign In';
+        document.getElementById('authToggle').innerHTML = 'New here? <a onclick="toggleAuthMode()">Register your face</a>';
+        hideAuthMessage();
+        authOverlay.classList.remove('hidden');
+        startWebcam();
+      }, 'Sign Out');
     }
 
     function setUserUI(name) {
       document.getElementById('sidebarName').textContent = name;
       document.getElementById('sidebarAvatar').textContent = name.charAt(0).toUpperCase();
-      const greeting = document.getElementById('welcomeGreeting');
-      if (greeting) {
-        greeting.textContent = name !== 'Guest'
-          ? `Hello, ${name}! How can I help?`
-          : 'Hello! How can I help?';
-      }
     }
 
     // ═══════════════════════════════════════
-    //   SIDEBAR
+    //   CHAT HISTORY STORE (localStorage)
     // ═══════════════════════════════════════
-    function toggleSidebar() { sidebar.classList.toggle('collapsed'); }
+    function storageKey() { return 'stla_conversations_' + (currentUser || 'guest'); }
 
-    function selectChat(el) {
-      document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
-      el.classList.add('active');
+    function loadConversations() {
+      try {
+        const raw = localStorage.getItem(storageKey());
+        conversations = raw ? JSON.parse(raw) : {};
+      } catch (e) { conversations = {}; }
     }
 
-    // ═══════════════════════════════════════
-    //   NEW CHAT
-    // ═══════════════════════════════════════
+    function saveConversations() {
+      try { localStorage.setItem(storageKey(), JSON.stringify(conversations)); }
+      catch (e) { console.error('Could not save chat history:', e); }
+    }
+
+    function initApp() {
+      loadConversations();
+      currentConvId = null;
+      renderChatList();
+      renderCurrentConversation();
+    }
+
+    function createConversation() {
+      const id = 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      conversations[id] = { id, title: 'New chat', messages: [], updatedAt: Date.now() };
+      currentConvId = id;
+      saveConversations();
+      return id;
+    }
+
     function startNewChat() {
+      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+      currentConvId = null;
+      renderChatList();
+      renderCurrentConversation();
+    }
+
+    function switchConversation(id) {
+      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+      currentConvId = id;
+      renderChatList();
+      renderCurrentConversation();
+    }
+
+    function deleteConversation(evt, id) {
+      evt.stopPropagation();
+      showConfirm('Delete this conversation? This cannot be undone.', () => {
+        delete conversations[id];
+        if (id === currentConvId) { currentConvId = null; }
+        saveConversations();
+        renderChatList();
+        renderCurrentConversation();
+      }, 'Delete');
+    }
+
+    function renderChatList() {
+      const term = (chatSearchEl.value || '').toLowerCase().trim();
+      let ids = Object.keys(conversations);
+      if (term) {
+        ids = ids.filter(id => {
+          const c = conversations[id];
+          if (c.title.toLowerCase().includes(term)) return true;
+          return c.messages.some(m => m.content.toLowerCase().includes(term));
+        });
+      }
+      ids.sort((a, b) => conversations[b].updatedAt - conversations[a].updatedAt);
+
+      if (ids.length === 0) {
+        chatListEl.innerHTML = '<div class="chat-list-empty">No conversations found</div>';
+        return;
+      }
+
+      chatListEl.innerHTML = ids.map(id => {
+        const c = conversations[id];
+        const active = id === currentConvId ? ' active' : '';
+        const time = new Date(c.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="chat-item${active}" onclick="switchConversation('${id}')">
+            <div class="chat-item-icon"></div>
+            <span class="chat-item-text">${esc(c.title)}</span>
+            <span class="chat-item-time">${time}</span>
+            <button class="chat-item-delete" title="Delete" onclick="deleteConversation(event, '${id}')">
+              <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
+          </div>`;
+      }).join('');
+    }
+
+    function renderCurrentConversation() {
+      const conv = currentConvId ? conversations[currentConvId] : null;
+      chatInner.innerHTML = '';
       history = [];
       lastUserQuestion = '';
+
+      if (!conv || conv.messages.length === 0) {
+        showWelcomeScreen();
+        return;
+      }
+
+      conv.messages.forEach(m => {
+        if (m.role === 'user') {
+          appendUserBubble(m.content, m.time);
+          history.push({ role: 'user', content: m.content });
+          lastUserQuestion = m.content;
+        } else {
+          appendBotBubble(m.content, m.sources, m.time);
+          history.push({ role: 'assistant', content: m.content });
+        }
+      });
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function showWelcomeScreen() {
+      const name = currentUser && currentUser !== 'Guest' ? currentUser : '';
       chatInner.innerHTML = `
-        <div class="welcome" id="welcome">
+        <div class="welcome">
           <div class="welcome-icon">
             <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
           </div>
-          <h2 id="welcomeGreeting">${currentUser && currentUser !== 'Guest' ? 'Hello, ' + esc(currentUser) + '! How can I help?' : 'Hello! How can I help?'}</h2>
-          <p>Ask me anything — I'll search your knowledge base and provide accurate, sourced answers.</p>
+          <h2>${name ? 'Hello, ' + esc(name) + '! How can I help?' : 'Hello! How can I help?'}</h2>
+          <p>Ask me anything - I'll search your knowledge base and provide accurate, sourced answers.</p>
           <div class="suggestions">
             <div class="suggestion-card" onclick="sendSuggestion(this)">
               <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
@@ -1349,6 +1635,49 @@ HTML_PAGE = """
         </div>`;
     }
 
+    function persistMessage(role, content, sources) {
+      if (!currentConvId || !conversations[currentConvId]) {
+        createConversation();
+      }
+      const conv = conversations[currentConvId];
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      conv.messages.push({ role, content, sources: sources || [], time });
+      conv.updatedAt = Date.now();
+      if (conv.title === 'New chat' && role === 'user') {
+        conv.title = content.slice(0, 32) + (content.length > 32 ? '...' : '');
+      }
+      saveConversations();
+      renderChatList();
+      return time;
+    }
+
+    // ═══════════════════════════════════════
+    //   CONFIRM MODAL (replaces native confirm())
+    // ═══════════════════════════════════════
+    function showConfirm(message, onConfirm, confirmLabel) {
+      const modal = document.getElementById('confirmModal');
+      const okBtn = document.getElementById('confirmModalOk');
+      const cancelBtn = document.getElementById('confirmModalCancel');
+      document.getElementById('confirmModalText').textContent = message;
+      okBtn.textContent = confirmLabel || 'Delete';
+      modal.classList.remove('hidden');
+
+      function cleanup() {
+        modal.classList.add('hidden');
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+      }
+      function onOk() { cleanup(); onConfirm(); }
+      function onCancel() { cleanup(); }
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+    }
+
+    // ═══════════════════════════════════════
+    //   SIDEBAR / TOGGLE
+    // ═══════════════════════════════════════
+    function toggleSidebar() { sidebar.classList.toggle('collapsed'); }
+
     // ═══════════════════════════════════════
     //   INPUT HELPERS
     // ═══════════════════════════════════════
@@ -1369,9 +1698,6 @@ HTML_PAGE = """
       msgInput.value = card.querySelector('.card-title').textContent;
       sendMessage();
     }
-    function getTime() {
-      return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
     function esc(s) {
       const d = document.createElement('div');
       d.textContent = s;
@@ -1383,25 +1709,20 @@ HTML_PAGE = """
     // ═══════════════════════════════════════
     function renderMd(text) {
       let html = esc(text);
-      // Code blocks
       html = html.replace(/```([\\s\\S]*?)```/g, '<pre><code>$1</code></pre>');
-      // Inline code
       html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-      // Bold
       html = html.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
-      // Italic
       html = html.replace(/\\*(.+?)\\*/g, '<em>$1</em>');
-      // Line breaks
       html = html.replace(/\\n/g, '<br>');
       return html;
     }
 
     // ═══════════════════════════════════════
-    //   MESSAGES
+    //   MESSAGE BUBBLES (pure DOM, no persistence)
     // ═══════════════════════════════════════
-    function createUserMessage(text) {
-      const w = document.getElementById('welcome');
-      if (w) w.remove();
+    function appendUserBubble(text, time) {
+      const welcome = chatInner.querySelector('.welcome');
+      if (welcome) welcome.remove();
 
       const div = document.createElement('div');
       div.className = 'message user';
@@ -1411,7 +1732,7 @@ HTML_PAGE = """
         <div class="msg-body">
           <div class="msg-bubble">${esc(text)}</div>
           <div class="msg-meta">
-            <span class="msg-time">${getTime()}</span>
+            <span class="msg-time">${time || ''}</span>
             <div class="msg-actions">
               <button class="msg-action" title="Copy" onclick="copyMsg(this)">
                 <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -1424,7 +1745,7 @@ HTML_PAGE = """
       chatArea.scrollTop = chatArea.scrollHeight;
     }
 
-    function createBotMessage(text, sources) {
+    function appendBotBubble(text, sources, time) {
       const div = document.createElement('div');
       div.className = 'message bot';
 
@@ -1449,7 +1770,7 @@ HTML_PAGE = """
         <div class="msg-body">
           <div class="msg-bubble">${html}</div>
           <div class="msg-meta">
-            <span class="msg-time">${getTime()}</span>
+            <span class="msg-time">${time || ''}</span>
             <div class="msg-actions">
               <button class="msg-action tts-btn" title="Read aloud">
                 <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
@@ -1510,7 +1831,9 @@ HTML_PAGE = """
       const text = msgInput.value.trim();
       if (!text) return;
       lastUserQuestion = text;
-      createUserMessage(text);
+      const uTime = persistMessage('user', text);
+      appendUserBubble(text, uTime);
+      history.push({ role: 'user', content: text });
       msgInput.value = '';
       autoResize(msgInput);
       updateSendBtn();
@@ -1525,15 +1848,15 @@ HTML_PAGE = """
         const data = await res.json();
         removeTyping();
         if (data.answer) {
-          createBotMessage(data.answer, data.sources);
-          history.push({ role: 'user', content: text });
+          const bTime = persistMessage('assistant', data.answer, data.sources);
+          appendBotBubble(data.answer, data.sources, bTime);
           history.push({ role: 'assistant', content: data.answer });
         } else {
-          createBotMessage(data.detail || 'Something went wrong.', []);
+          appendBotBubble(data.detail || 'Something went wrong.', []);
         }
       } catch (err) {
         removeTyping();
-        createBotMessage('Connection lost. Is the server still running?', []);
+        appendBotBubble('Connection lost. Is the server still running?', []);
       }
     }
 
@@ -1552,8 +1875,11 @@ HTML_PAGE = """
         const data = await res.json();
         removeTyping();
         if (data.answer) {
-          createBotMessage(data.answer, data.sources);
-          history.push({ role: 'user', content: lastUserQuestion });
+          const conv = conversations[currentConvId];
+          conv.messages.pop();
+          history.pop();
+          const bTime = persistMessage('assistant', data.answer, data.sources);
+          appendBotBubble(data.answer, data.sources, bTime);
           history.push({ role: 'assistant', content: data.answer });
         }
       } catch (err) { removeTyping(); }
@@ -1571,12 +1897,37 @@ HTML_PAGE = """
     }
 
     // ═══════════════════════════════════════
-    //   ACTION BUTTONS
+    //   TEXT-TO-SPEECH (play / stop toggle)
     // ═══════════════════════════════════════
+    const SPEAKER_SVG = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+    const STOP_SVG = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
+
+    function resetTtsBtn(btn) {
+      if (!btn) return;
+      btn.innerHTML = SPEAKER_SVG;
+      btn.classList.remove('playing');
+      btn.title = 'Read aloud';
+    }
+
     async function playAudio(btn) {
+      // Clicking the button that is currently speaking stops it.
+      if (currentAudio && currentAudioBtn === btn) {
+        currentAudio.pause();
+        currentAudio = null;
+        resetTtsBtn(currentAudioBtn);
+        currentAudioBtn = null;
+        return;
+      }
+      // Stop whatever else was playing first.
+      if (currentAudio) {
+        currentAudio.pause();
+        resetTtsBtn(currentAudioBtn);
+        currentAudio = null;
+        currentAudioBtn = null;
+      }
+
       const text = btn.dataset.text || '';
       try {
-        btn.style.color = 'var(--accent-1)';
         const response = await fetch('/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1585,14 +1936,27 @@ HTML_PAGE = """
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        currentAudio = audio;
+        currentAudioBtn = btn;
+        btn.innerHTML = STOP_SVG;
+        btn.classList.add('playing');
+        btn.title = 'Stop';
         await audio.play();
-        audio.onended = () => { btn.style.color = ''; URL.revokeObjectURL(url); };
+        audio.onended = () => {
+          resetTtsBtn(btn);
+          if (currentAudioBtn === btn) { currentAudio = null; currentAudioBtn = null; }
+          URL.revokeObjectURL(url);
+        };
       } catch (err) {
-        btn.style.color = 'var(--red)';
-        setTimeout(() => btn.style.color = '', 2000);
+        resetTtsBtn(btn);
+        currentAudio = null;
+        currentAudioBtn = null;
       }
     }
 
+    // ═══════════════════════════════════════
+    //   ACTION BUTTONS
+    // ═══════════════════════════════════════
     function copyMsg(btn) {
       const bubble = btn.closest('.msg-body').querySelector('.msg-bubble');
       navigator.clipboard.writeText(bubble.innerText);
@@ -1613,11 +1977,7 @@ HTML_PAGE = """
         showToast('Voice input is not supported in this browser.');
         return;
       }
-
-      if (isRecording) {
-        recognition.stop();
-        return;
-      }
+      if (isRecording) { recognition.stop(); return; }
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SpeechRecognition();
@@ -1625,23 +1985,15 @@ HTML_PAGE = """
       recognition.interimResults = true;
       recognition.continuous = false;
 
-      recognition.onstart = () => {
-        isRecording = true;
-        micBtn.classList.add('recording');
-      };
+      recognition.onstart = () => { isRecording = true; micBtn.classList.add('recording'); };
       recognition.onresult = (e) => {
         let transcript = '';
-        for (const result of e.results) {
-          transcript += result[0].transcript;
-        }
+        for (const result of e.results) { transcript += result[0].transcript; }
         msgInput.value = transcript;
         autoResize(msgInput);
         updateSendBtn();
       };
-      recognition.onend = () => {
-        isRecording = false;
-        micBtn.classList.remove('recording');
-      };
+      recognition.onend = () => { isRecording = false; micBtn.classList.remove('recording'); };
       recognition.onerror = (e) => {
         isRecording = false;
         micBtn.classList.remove('recording');
@@ -1656,23 +2008,17 @@ HTML_PAGE = """
     async function handleFileUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
-      event.target.value = ''; // reset
-
+      event.target.value = '';
       showToast(`Uploading "${file.name}"...`);
-
       const formData = new FormData();
       formData.append('file', file);
-
       try {
         const res = await fetch('/upload', { method: 'POST', body: formData });
         const data = await res.json();
-        if (res.ok) {
-          showToast(`✓ ${data.message}`);
-        } else {
-          showToast(`✗ ${data.detail || 'Upload failed'}`, true);
-        }
+        if (res.ok) { showToast(`\u2713 ${data.message}`); }
+        else { showToast(`\u2717 ${data.detail || 'Upload failed'}`, true); }
       } catch (err) {
-        showToast('✗ Upload error: ' + err.message, true);
+        showToast('\u2717 Upload error: ' + err.message, true);
       }
     }
 
