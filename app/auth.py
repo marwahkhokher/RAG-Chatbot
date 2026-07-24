@@ -153,7 +153,7 @@ def login_face(img_array: np.ndarray) -> dict:
             k=1, 
             collection_name=config.QDRANT_FACES_COLLECTION
         )
-    except Exception:
+    except Exception: # noqa: BLE001
         results = []
 
     if not results:
