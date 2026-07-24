@@ -7,6 +7,7 @@ no FastAPI needed here.
 import asyncio
 import base64
 import hashlib
+import io
 import os
 import uuid
 from datetime import datetime, timezone
@@ -15,6 +16,8 @@ from pathlib import Path
 import edge_tts
 import streamlit as st
 from groq import Groq
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pypdf import PdfReader
 
 try:
     from streamlit_mic_recorder import mic_recorder
@@ -42,7 +45,8 @@ if any(p.exists() for p in _secrets_file_candidates):
         except Exception:  # noqa: BLE001, S110
             pass
 
-from app.rag import answer_question
+from app import auth
+from app.rag import answer_question, upsert_documents
 
 TTS_VOICE = "en-US-AriaNeural"
 
@@ -114,6 +118,14 @@ st.markdown("""
 
 .stApp { background: var(--bg-primary); color: var(--text-primary); font-family: 'Inter', sans-serif; }
 
+/* Center the chat + input in a fixed-width column like the FastAPI app */
+.block-container {
+    max-width: 820px !important;
+    margin: 0 auto !important;
+    padding-top: 2rem !important;
+    padding-bottom: 6rem !important;
+}
+
 section[data-testid="stSidebar"] {
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
@@ -153,25 +165,27 @@ div[data-testid="column"] .stButton>button {
 }
 div[data-testid="column"] .stButton>button:hover { border-color: var(--accent); background: var(--bg-tertiary); }
 
-.message { display: flex; gap: 12px; max-width: 78%; margin-bottom: 16px; }
-.message.user { margin-left: auto; flex-direction: row-reverse; }
-.message.bot { margin-right: auto; }
+.message { display: flex; gap: 14px; margin-bottom: 22px; align-items: flex-start; }
+.message.user { flex-direction: row-reverse; }
 .avatar {
-    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;
 }
-.message.user .avatar { background: var(--accent); color: #fff; }
-.message.bot .avatar { background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-secondary); }
-.bubble { padding: 13px 17px; border-radius: 14px; font-size: 14px; line-height: 1.6; color: var(--text-primary); }
-.message.user .bubble { background: var(--user-bubble); border: 1px solid var(--border); border-top-right-radius: 4px; }
-.message.bot .bubble { background: var(--bot-bubble); border: 1px solid var(--border); border-top-left-radius: 4px; }
-.bubble-time { font-size: 10.5px; color: var(--text-muted); margin-top: 8px; }
+.message.user .avatar { background: linear-gradient(135deg, var(--accent), #4361ee); color: #fff; }
+.message.bot .avatar { background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--accent); }
+.avatar svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.msg-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bubble { padding: 14px 18px; border-radius: 14px; font-size: 14px; line-height: 1.7; color: var(--text-primary); max-width: 88%; overflow-wrap: anywhere; }
+.message.user .bubble { background: var(--bg-tertiary); border: 1px solid var(--border); border-top-right-radius: 4px; margin-left: auto; }
+.message.bot .bubble { background: transparent; padding: 4px 0 0; }
+.bubble-time { font-size: 10.5px; color: var(--text-muted); margin-top: 6px; }
+.message.user .bubble-time { text-align: right; }
 
-.sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .source-tag {
-    display: inline-flex; align-items: center; padding: 5px 10px;
-    background: var(--bg-primary); border: 1px solid var(--border);
-    border-radius: 6px; font-size: 11.5px; color: var(--text-secondary);
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 999px; font-size: 11.5px; color: var(--text-secondary);
 }
 
 .typing-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
@@ -182,9 +196,19 @@ div[data-testid="column"] .stButton>button:hover { border-color: var(--accent); 
 @keyframes bounce { 0%,80%,100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
 .typing-label { font-size: 12px; color: var(--text-muted); }
 
+[data-testid="stChatInput"] { background: transparent !important; }
+[data-testid="stChatInput"] > div {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 26px !important;
+}
 [data-testid="stChatInput"] textarea {
-    background: var(--bg-secondary) !important; border: 1px solid var(--border) !important;
-    color: var(--text-primary) !important; border-radius: 12px !important;
+    background: transparent !important; border: none !important;
+    color: var(--text-primary) !important; font-size: 14px !important;
+}
+[data-testid="stChatInput"]:focus-within > div {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-glow) !important;
 }
 
 /* flat icon-row action buttons under assistant messages (speak / regenerate) */
@@ -200,6 +224,107 @@ div[class*="st-key-actions_"] .stButton > button:hover {
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ---------- knowledge-base ingestion (mirrors the FastAPI /upload endpoint) ----------
+def ingest_uploaded(uploaded) -> int:
+    """Ingest a Streamlit UploadedFile (.txt/.md/.pdf) into Qdrant. Returns #chunks."""
+    raw = uploaded.getvalue()
+    suffix = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
+    if suffix == "pdf":
+        reader = PdfReader(io.BytesIO(raw))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    else:
+        text = raw.decode("utf-8", errors="replace")
+
+    if not text.strip():
+        raise ValueError("File appears to be empty.")
+
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    chunks = splitter.split_text(text)
+    upsert_documents(chunks, [uploaded.name] * len(chunks))
+    return len(chunks)
+
+
+# ---------- face-recognition auth gate (mirrors the FastAPI auth overlay) ----------
+st.session_state.setdefault("authenticated", False)
+st.session_state.setdefault("username", "")
+
+
+def render_auth_gate() -> None:
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        st.markdown(
+            '<div style="text-align:center;padding-top:8px;">'
+            '<div style="font-size:22px;font-weight:600;letter-spacing:-0.02em;">RAG-Chatbot</div>'
+            '<div style="color:var(--text-muted);font-size:14px;margin-top:4px;">'
+            'Sign in with your face to continue</div></div>',
+            unsafe_allow_html=True,
+        )
+
+        if not auth.FACE_LIB_AVAILABLE:
+            st.info("Face recognition isn't available in this environment. You can continue as a guest.")
+
+        mode = st.radio(
+            "Mode",
+            ["Sign In", "Register"],
+            horizontal=True,
+            label_visibility="collapsed",
+            disabled=not auth.FACE_LIB_AVAILABLE,
+        )
+
+        reg_name = ""
+        if mode == "Register":
+            reg_name = st.text_input("Your name", placeholder="Enter your name")
+
+        img = st.camera_input("Look at the camera") if auth.FACE_LIB_AVAILABLE else None
+
+        c1, c2 = st.columns(2)
+        with c1:
+            act = st.button(
+                "Register Face" if mode == "Register" else "Sign In",
+                type="primary",
+                use_container_width=True,
+                disabled=not auth.FACE_LIB_AVAILABLE,
+            )
+        with c2:
+            skip = st.button("Continue as Guest", use_container_width=True)
+
+        if skip:
+            st.session_state.authenticated = True
+            st.session_state.username = "Guest"
+            st.rerun()
+
+        if act:
+            if img is None:
+                st.error("Please capture a photo first using the camera above.")
+                return
+            if mode == "Register" and not reg_name.strip():
+                st.error("Please enter your name to register.")
+                return
+            try:
+                arr = auth._bytes_to_image(img.getvalue())
+                result = (
+                    auth.register_face(reg_name, arr)
+                    if mode == "Register"
+                    else auth.login_face(arr)
+                )
+            except RuntimeError as exc:
+                st.error(str(exc))
+                return
+
+            if result["authenticated"]:
+                st.session_state.authenticated = True
+                st.session_state.username = result["username"]
+                st.rerun()
+            else:
+                st.error(result["message"])
+
+
+if not st.session_state.authenticated:
+    render_auth_gate()
+    st.stop()
+
 
 # ---------- state: multiple conversations, each with its own history ----------
 if "conversations" not in st.session_state:
@@ -261,6 +386,73 @@ with st.sidebar:
             st.session_state.pending = None
             st.rerun()
 
+    # ---------- knowledge base uploader (mirrors FastAPI file upload) ----------
+    st.divider()
+    st.markdown(
+        '<div style="font-size:13px;font-weight:600;color:var(--text-secondary);'
+        'text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Knowledge base</div>',
+        unsafe_allow_html=True,
+    )
+    uploaded = st.file_uploader(
+        "Add a document",
+        type=["txt", "md", "pdf"],
+        key="kb_uploader",
+        label_visibility="collapsed",
+    )
+    if uploaded is not None:
+        sig = f"{uploaded.name}:{uploaded.size}"
+        if st.session_state.get("last_ingested_sig") != sig:
+            with st.spinner(f"Ingesting {uploaded.name}…"):
+                try:
+                    n_chunks = ingest_uploaded(uploaded)
+                    st.session_state.last_ingested_sig = sig
+                    st.success(f"Added {n_chunks} chunk(s) from {uploaded.name}")
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"Upload failed: {exc}")
+
+    # ---------- voice input ----------
+    if mic_recorder is not None:
+        st.divider()
+        st.markdown(
+            '<div style="font-size:13px;font-weight:600;color:var(--text-secondary);'
+            'text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Voice</div>',
+            unsafe_allow_html=True,
+        )
+        mic_result = mic_recorder(
+            start_prompt="🎙️ Speak",
+            stop_prompt="⏹️ Stop",
+            just_once=False,
+            use_container_width=True,
+            key="voice_recorder",
+        )
+        if isinstance(mic_result, dict):
+            audio_bytes = mic_result.get("bytes") or mic_result.get("audio_bytes")
+            if audio_bytes:
+                audio_key = hashlib.sha1(audio_bytes).hexdigest()
+                if audio_key != st.session_state.last_processed_mic_audio_key:
+                    with st.spinner("Transcribing audio…"):
+                        transcript = transcribe_audio_bytes(audio_bytes)
+                    st.session_state.last_processed_mic_audio_key = audio_key
+                    if transcript:
+                        st.session_state.voice_prompt = transcript
+
+    # ---------- account footer ----------
+    st.divider()
+    _uname = st.session_state.get("username") or "Guest"
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:10px;padding:2px;">'
+        f'<div style="width:30px;height:30px;border-radius:50%;background:var(--accent);'
+        f'color:#fff;display:flex;align-items:center;justify-content:center;'
+        f'font-size:13px;font-weight:600;flex-shrink:0;">{_uname[:1].upper()}</div>'
+        f'<div><div style="font-size:13px;font-weight:500;">{_uname}</div>'
+        f'<div style="font-size:11px;color:var(--text-muted);">RAG Workspace</div></div></div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Sign out", use_container_width=True, key="signout_btn"):
+        st.session_state.authenticated = False
+        st.session_state.username = ""
+        st.rerun()
+
 # ---------- header ----------
 st.markdown(
     '<div class="rc-header"><div class="rc-dot"></div><div class="rc-brand">RAG-Chatbot</div></div>',
@@ -268,22 +460,31 @@ st.markdown(
 )
 
 
+BOT_ICON = (
+    '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/>'
+    '<path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>'
+)
+
+
 def render_message(msg: dict, idx: int, is_last: bool):
     role = msg["role"]
     css_role = "user" if role == "user" else "bot"
-    avatar = "U" if role == "user" else "R"
+    avatar = (st.session_state.get("username") or "U")[:1].upper() if role == "user" else BOT_ICON
     content = msg["content"].replace("\n", "<br>")
 
     sources_html = ""
     if role == "assistant" and msg.get("sources"):
         unique_sources = list(dict.fromkeys(s.get("source", "unknown") for s in msg["sources"]))
-        tags = "".join(f'<span class="source-tag">{s}</span>' for s in unique_sources)
+        tags = "".join(f'<span class="source-tag">📄 {s}</span>' for s in unique_sources)
         sources_html = f'<div class="sources">{tags}</div>'
 
     st.markdown(
-        f'<div class="message {css_role}"><div class="avatar">{avatar}</div>'
-        f'<div class="bubble">{content}{sources_html}'
-        f'<div class="bubble-time">{msg.get("time", "")}</div></div></div>',
+        f'<div class="message {css_role}">'
+        f'<div class="avatar">{avatar}</div>'
+        f'<div class="msg-body">'
+        f'<div class="bubble">{content}{sources_html}</div>'
+        f'<div class="bubble-time">{msg.get("time", "")}</div>'
+        f'</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -339,7 +540,9 @@ chat_area = st.container()
 with chat_area:
     if not current["messages"]:
         st.markdown('<div class="welcome">', unsafe_allow_html=True)
-        st.markdown("<h2>How can I help you today?</h2>", unsafe_allow_html=True)
+        _u = st.session_state.get("username") or ""
+        _greet = f"Hello, {_u}! How can I help?" if _u and _u != "Guest" else "How can I help you today?"
+        st.markdown(f"<h2>{_greet}</h2>", unsafe_allow_html=True)
         st.markdown(
             "<p>Ask me anything. I'll search your knowledge base and provide accurate, sourced answers.</p>",
             unsafe_allow_html=True,
@@ -364,7 +567,7 @@ with chat_area:
     if st.session_state.pending:
         st.markdown(
             '<div class="typing-row"><div class="avatar" style="background:var(--bg-tertiary);'
-            'border:1px solid var(--border);color:var(--text-secondary);">R</div>'
+            f'border:1px solid var(--border);">{BOT_ICON}</div>'
             '<div class="typing-dots"><span></span><span></span><span></span></div>'
             '<span class="typing-label">Searching knowledge base...</span></div>',
             unsafe_allow_html=True,
@@ -387,32 +590,8 @@ with chat_area:
         st.session_state.pending = None
         st.rerun()
 
-mic_col, input_col = st.columns([1, 10])
-
-with mic_col:
-    if mic_recorder is None:
-        st.caption("🎙️ Mic input unavailable")
-    else:
-        mic_result = mic_recorder(
-            start_prompt="🎙️",
-            stop_prompt="⏹️",
-            just_once=False,
-            use_container_width=False,
-            key="voice_recorder",
-        )
-        if isinstance(mic_result, dict):
-            audio_bytes = mic_result.get("bytes") or mic_result.get("audio_bytes")
-            if audio_bytes:
-                audio_key = hashlib.sha1(audio_bytes).hexdigest()
-                if audio_key != st.session_state.last_processed_mic_audio_key:
-                    with st.spinner("Transcribing audio..."):
-                        transcript = transcribe_audio_bytes(audio_bytes)
-                    st.session_state.last_processed_mic_audio_key = audio_key
-                    if transcript:
-                        st.session_state.voice_prompt = transcript
-
-with input_col:
-    prompt = st.chat_input("Ask anything...")
+# Top-level chat_input docks to the bottom of the page (voice input lives in the sidebar).
+prompt = st.chat_input("Ask anything...")
 
 if st.session_state.voice_prompt:
     st.info(f"Voice transcript: {st.session_state.voice_prompt}")
